@@ -1,0 +1,64 @@
+experiment:
+  name: grfd_cv_continual
+  output_dir: runs
+  seed: 42
+  device: auto
+  n_folds: 3
+  val_size: 0.15
+  run_joint: true
+  run_baselines: true
+  run_continual: true
+
+data:
+  csv_path: data/all_labeled_data.csv
+  label_col: label
+  max_rows: null
+
+student:
+  hidden_dim: 96
+  n_experts: 3
+  dropout: 0.1
+
+teacher:
+  n_estimators: 100
+  max_features: sqrt
+  min_samples_leaf: 2
+  class_weight: balanced_subsample
+  n_jobs: -1
+
+training:
+  epochs: 30
+  patience: 8
+  batch_size: 256
+  eval_batch_size: 2048
+  lr: 0.001
+  weight_decay: 0.0001
+  grad_clip: 1.0
+  temperature: 3.0
+  kd_weight: 0.6
+  lwf_weight: 0.15
+
+reliability:
+  min_weight: 0.10
+  max_weight: 1.00
+  min_oob_rows: 50
+  max_iter: 150
+
+continual:
+  n_tasks: 5
+  save_task_teachers: true
+  run: [naive, replay, lwf, replay_lwf, fixed_kd_750, adaptive_kd_750, adaptive_kd_0, adaptive_kd_3000]
+  variants:
+    naive:            {replay: 0,    lwf: false, adaptive_kd: false}
+    replay:           {replay: 750,  lwf: false, adaptive_kd: false}
+    lwf:              {replay: 0,    lwf: true,  adaptive_kd: false}
+    replay_lwf:       {replay: 750,  lwf: true,  adaptive_kd: false}
+    fixed_kd_750:     {replay: 750,  lwf: false, adaptive_kd: false}
+    adaptive_kd_750:  {replay: 750,  lwf: false, adaptive_kd: true}
+    adaptive_kd_0:    {replay: 0,    lwf: false, adaptive_kd: true}
+    adaptive_kd_3000: {replay: 3000, lwf: false, adaptive_kd: true}
+
+baselines:
+  rf_trees: 200
+  lr_max_iter: 300
+  hgb_max_iter: 150

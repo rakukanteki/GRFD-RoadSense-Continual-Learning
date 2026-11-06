@@ -1,0 +1,21 @@
+experiment:
+  name: quick_test
+  n_folds: 2
+
+data:
+  max_rows: 30000
+
+teacher:
+  n_estimators: 12
+
+training:
+  epochs: 2
+  patience: 2
+
+continual:
+  save_task_teachers: false
+  run: [naive, replay_lwf, adaptive_kd_750]
+
+baselines:
+  rf_trees: 20
+  hgb_max_iter: 20
