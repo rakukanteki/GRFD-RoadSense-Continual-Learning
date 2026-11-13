@@ -1,0 +1,11 @@
+experiment:
+  name: smoke
+
+training:
+  steps: 5
+
+protocol:
+  profile: smoke
+  folds: 2
+  seeds: 1
+  bootstrap_iterations: 50
