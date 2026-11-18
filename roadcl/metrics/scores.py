@@ -7,7 +7,7 @@ from sklearn.metrics import confusion_matrix, precision_recall_fscore_support
 from roadcl.config import CLASSES
 
 GROUP_KEYS = ["split_repeat", "fold", "seed_id", "first_anomaly", "suite", "method", "representation",
-              "objective", "memory_per_class", "kd_lambda", "width", "rotation"]
+              "objective", "memory_per_class", "kd_lambda", "width", "bag_size", "rotation"]
 
 
 def recording_scores(truth: list[int], pred: list[int], active: list[int]) -> dict | None:
@@ -55,12 +55,16 @@ def _score_stage(subset: pd.DataFrame, active: list[int], stage: int, row: dict)
     row[f"accuracy_s{stage}"] = result["accuracy"]
     row[f"balanced_accuracy_s{stage}"] = result["balanced_accuracy"]
     for name, metric in result["per_class"].items():
+        row[f"{name.lower()}_precision_s{stage}"] = metric["precision"]
         row[f"{name.lower()}_recall_s{stage}"] = metric["recall"]
         row[f"{name.lower()}_f1_s{stage}"] = metric["f1"]
     ece, brier = calibration(subset.confidence.to_numpy(float),
                              (subset.truth == subset.prediction).to_numpy())
     row[f"ece_s{stage}"] = ece
     row[f"confidence_brier_s{stage}"] = brier
+    proba = subset[[f"prob_{CLASSES[k].lower()}" for k in active]].to_numpy(float)
+    indicator = np.eye(len(active))[[active.index(k) for k in truth]]
+    row[f"multiclass_brier_s{stage}"] = float(np.mean(np.sum((proba - indicator) ** 2, axis=1)))
     return True
 
 
@@ -77,6 +81,8 @@ def aggregate_scores(predictions: pd.DataFrame) -> pd.DataFrame:
         row["old_forgetting_pp"] = 50 * (row["normal_recall_s1"] + row[f"{old_name}_recall_s1"]
                                          - row["normal_recall_s2"] - row[f"{old_name}_recall_s2"])
         row["new_recall"] = row[f"{new_name}_recall_s2"]
+        row["normal_forgetting_pp"] = 100 * (row["normal_recall_s1"] - row["normal_recall_s2"])
+        row["old_anomaly_forgetting_pp"] = 100 * (row[f"{old_name}_recall_s1"] - row[f"{old_name}_recall_s2"])
         row["backward_transfer"] = -row["old_forgetting_pp"] / 100
         row["buffer_feature_bytes"] = int(frame.buffer_feature_bytes.max())
         row["stage2_train_s"] = float(frame[frame.stage == 2].train_seconds.max())

@@ -1,5 +1,5 @@
 from .figures import make_figures
-from .report import report_run
-from .tables import build_tables
+from .report import read_optional, report_run
+from .tables import research_report, write_diagnostics
 
-__all__ = ["build_tables", "make_figures", "report_run"]
+__all__ = ["make_figures", "read_optional", "report_run", "research_report", "write_diagnostics"]

@@ -58,11 +58,16 @@ def make_windows(data: pd.DataFrame, metadata: pd.DataFrame, cfg: DataConfig, ou
 
     raw = np.concatenate(chunks).astype(np.float32)
     index = pd.DataFrame(rows, columns=["record", "segment_id", "start_s", "peak_accel"])
+    index["rms_accel"] = np.sqrt(np.mean(np.sum(raw[:, :, :3] ** 2, axis=2), axis=1))
     index = index.join(metadata.set_index("record"), on="record", validate="many_to_one")
 
     metadata = metadata.copy()
     metadata["usable"] = metadata.record.isin(index.record)
     metadata.to_csv(out_dir / "recording_audit.csv", index=False)
+    # One source id must stay in one fold even when it appears under several classes.
+    metadata.groupby("source_group").agg(
+        n_records=("record", "nunique"), classes=("label", lambda x: ",".join(sorted(x.unique())))
+    ).reset_index().to_csv(out_dir / "source_provenance.csv", index=False)
     metadata = metadata[metadata.usable].reset_index(drop=True)
     index.to_csv(out_dir / "window_index.csv", index=False)
 

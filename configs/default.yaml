@@ -14,6 +14,7 @@ data:
   stride: 45
   noise_std: 0.10
   perturbation_seed: 1007
+  session_manifest: null   # CSV with record,session_id to replace the filename session proxy
 
 training:
   steps: 100
@@ -23,16 +24,19 @@ training:
   temperature: 2.0
   gate_power: 1.0
   lr: 0.003
+  ewc_lambda: 10.0
+  lwf_lambda: 1.0
   grad_clip: 5.0
 
 protocol:
   profile: full
-  folds: 4
+  folds: 5
+  inner_folds: 2
+  lr_grid: [0.001, 0.003]
   split_repeats: 1
   seeds: 5
   seed: 42
   threads: 1
   bootstrap_iterations: 1000
-  latency_windows: 128
   latency_repeats: 10
   checkpoint: true

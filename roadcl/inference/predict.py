@@ -14,11 +14,12 @@ from roadcl.models.mlp import FeatureMLP, bag_pool
 
 
 def load_checkpoint(path: str | Path) -> tuple[FeatureMLP, dict]:
-    ckpt = torch.load(path, map_location="cpu", weights_only=False)
+    ckpt = torch.load(path, map_location="cpu", weights_only=True)
     state = ckpt["state_dict"]
     net = FeatureMLP(state["net.0.weight"].shape[1], ckpt["width"])
     net.load_state_dict(state)
     net.eval()
+    ckpt["mean"], ckpt["std"] = (np.asarray(ckpt[k], np.float32) for k in ("mean", "std"))
     return net, ckpt
 
 
@@ -33,7 +34,8 @@ def predict_frame(frame: pd.DataFrame, checkpoint: str | Path, group_col: str = 
         frame["segment_id"] = 0
     if group_col not in frame.columns:
         frame[group_col] = "recording"
-    cfg = DataConfig(fs=ckpt.get("fs", DataConfig.fs), window=ckpt["window"], stride=ckpt["stride"])
+    cfg = DataConfig(fs=ckpt.get("fs", DataConfig.fs), time_tol=ckpt.get("time_tol", DataConfig.time_tol),
+                     window=ckpt["window"], stride=ckpt["stride"])
     classes = ckpt["classes"]
 
     rows = []

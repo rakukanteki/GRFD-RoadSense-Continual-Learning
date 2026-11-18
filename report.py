@@ -16,7 +16,7 @@ def main() -> None:
 
     setup_logging()
     cfg = load_config(args.run_dir / "config.yaml")
-    report_run(args.run_dir, cfg.protocol.bootstrap_iterations, cfg.protocol.seed, figures=not args.no_figures)
+    report_run(args.run_dir, cfg, figures=not args.no_figures)
 
 
 if __name__ == "__main__":

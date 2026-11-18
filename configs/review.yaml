@@ -1,0 +1,12 @@
+# The reviewer run in TVT_Continual_Learning_Reviewer_Experiments.ipynb.
+experiment:
+  name: tvt_grouped_evaluation
+
+protocol:
+  profile: review
+  folds: 5
+  inner_folds: 2
+  lr_grid: [0.001, 0.003]
+  seeds: 2
+  bootstrap_iterations: 2000
+  checkpoint: true

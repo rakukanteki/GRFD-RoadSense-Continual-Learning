@@ -30,7 +30,7 @@ def main() -> None:
     cfg = load_config(args.config, overrides)
     run_dir = run_benchmark(cfg)
     if not args.no_report:
-        report_run(run_dir, cfg.protocol.bootstrap_iterations, cfg.protocol.seed)
+        report_run(run_dir, cfg)
 
 
 if __name__ == "__main__":

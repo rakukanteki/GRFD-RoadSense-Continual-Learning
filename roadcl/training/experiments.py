@@ -12,6 +12,7 @@ class Experiment:
     memory_per_class: int = 24
     kd_lambda: float = 1.0
     width: int = 32
+    bag_size: int = 0  # 0 means training.windows_per_bag
 
 
 @dataclass(frozen=True)
@@ -21,18 +22,24 @@ class MethodSpec:
     kd_lambda: float
 
 
-REPLAY_ONLY = ("random", "stratified", "diverse", "herding", "kcenter")
+NO_MEMORY = ("fine_tune", "ewc", "lwf", "joint")
+REPLAY_ONLY = ("global_random", "reservoir", "stratified_rms", "random", "recording_balanced", "impact_only",
+               "stratified", "diverse", "herding", "kcenter")
+RANDOM_REPLAY = ("er_ace", "weight_align")
 DISTILLED = {
     "fixed_kd": ("diverse", "fixed"),
     "gated_kd": ("diverse", "gated"),
     "stratified_fixed_kd": ("stratified", "fixed"),
     "stratified_gated_kd": ("stratified", "gated"),
 }
+ABLATION = ["random", "recording_balanced", "impact_only", "stratified"]
 
 
 def method_spec(exp: Experiment) -> MethodSpec:
-    if exp.method in ("fine_tune", "joint"):
+    if exp.method in NO_MEMORY:
         return MethodSpec(None, "none", 0.0)
+    if exp.method in RANDOM_REPLAY:
+        return MethodSpec("random", "none", 0.0)
     if exp.method in REPLAY_ONLY:
         return MethodSpec(exp.method, "none", 0.0)
     if exp.method in DISTILLED:
@@ -42,13 +49,20 @@ def method_spec(exp: Experiment) -> MethodSpec:
 
 
 def build_suite(profile: str) -> list[Experiment]:
-    """Main comparison plus the ablation suites reported in the paper."""
+    """Review comparisons; the full profile adds the capacity, representation, memory and gate sweeps."""
     if profile == "smoke":
-        return [Experiment("main", m) for m in
-                ["fine_tune", "stratified", "stratified_fixed_kd", "stratified_gated_kd", "joint"]]
+        return [Experiment("component_ablation", m) for m in ABLATION]
     suite = [Experiment("main", m) for m in
-             ["fine_tune", "random", "stratified", "diverse", "fixed_kd", "gated_kd", "joint",
-              "stratified_fixed_kd", "stratified_gated_kd"]]
+             ["fine_tune", "random", "stratified", "diverse", "fixed_kd", "gated_kd", "joint"]]
+    suite += [Experiment("regularization", m) for m in ("ewc", "lwf")]
+    suite += [Experiment("component_ablation", m) for m in ABLATION]
+    suite += [Experiment("main", m) for m in
+              ["global_random", "reservoir", "er_ace", "weight_align", "herding", "stratified_gated_kd"]]
+    suite += [Experiment("descriptor", "stratified_rms"), Experiment("augmented", "stratified_gated_kd")]
+    if profile == "review":
+        return suite
+    suite += [Experiment("main", "stratified_fixed_kd")]
+    suite += [Experiment("bag_size", "stratified", bag_size=n) for n in (1, 4, 16, 32)]
     suite += [Experiment("stratified_supervision", "stratified", "axes", "window"),
               Experiment("stratified_supervision", "stratified_gated_kd", "axes", "window")]
     suite += [Experiment("stratified_memory", "stratified_gated_kd", memory_per_class=n) for n in (8, 16, 48, 96)]

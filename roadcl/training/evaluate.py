@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import time
-
 import numpy as np
 import torch
 from torch import nn
@@ -19,14 +17,3 @@ def predict_recording(net: nn.Module, features: torch.Tensor, ids: np.ndarray,
         probs = F.softmax(pooled, dim=-1).cpu().numpy()
     return active[int(np.argmax(probs))], probs
 
-
-def cpu_latency_ms(net: nn.Module, batch: torch.Tensor, repeats: int, warmup: int = 3) -> float:
-    """Mean inference time per window over `repeats` timed passes."""
-    net.eval()
-    with torch.inference_mode():
-        for _ in range(warmup):
-            net(batch)
-        start = time.perf_counter()
-        for _ in range(repeats):
-            net(batch)
-    return (time.perf_counter() - start) * 1000 / (repeats * max(1, len(batch)))

@@ -8,7 +8,8 @@ import pandas as pd
 
 from roadcl.config import CLASSES
 
-POLICIES = ("random", "stratified", "diverse", "herding", "kcenter")
+POLICIES = ("random", "global_random", "reservoir", "recording_balanced", "impact_only", "stratified",
+            "stratified_rms", "diverse", "herding", "kcenter")
 
 
 @dataclass
@@ -53,6 +54,48 @@ def impact_stratified(records: list[str], bags: dict[str, np.ndarray], peak: np.
                 break
         if not progress:
             break
+    return chosen
+
+
+def reservoir(ids: np.ndarray, n_keep: int, rng: np.random.Generator) -> list[int]:
+    """Streaming reservoir sampling over the class's windows in arrival order."""
+    chosen = list(ids[:n_keep])
+    for i in range(n_keep, len(ids)):
+        j = rng.integers(i + 1)
+        if j < n_keep:
+            chosen[j] = ids[i]
+    return chosen
+
+
+def recording_balanced(records: list[str], bags: dict[str, np.ndarray], n_keep: int,
+                       rng: np.random.Generator) -> list[int]:
+    """One random window per recording per pass, without replacement."""
+    queues = {r: list(rng.permutation(bags[r])) for r in records}
+    chosen: list[int] = []
+    while len(chosen) < n_keep:
+        progress = False
+        for record in rng.permutation(records):
+            if queues[record]:
+                chosen.append(int(queues[record].pop()))
+                progress = True
+                if len(chosen) == n_keep:
+                    break
+        if not progress:
+            break
+    return chosen
+
+
+def impact_only(ids: np.ndarray, peak: np.ndarray, n_keep: int, rng: np.random.Generator) -> list[int]:
+    """Cycle through pooled peak tertiles without balancing recordings."""
+    order = ids[np.argsort(peak[ids])]
+    tiers = [list(rng.permutation(t)) for t in np.array_split(order, 3)]
+    chosen: list[int] = []
+    while len(chosen) < n_keep:
+        for t in rng.permutation(3):
+            if tiers[t]:
+                chosen.append(int(tiers[t].pop()))
+            if len(chosen) == n_keep:
+                break
     return chosen
 
 
@@ -113,16 +156,32 @@ def select_replay(records: list[str], bags: dict[str, np.ndarray], label: dict[s
     if policy not in POLICIES:
         raise ValueError(f"unknown replay policy {policy!r}")
     rng = np.random.default_rng(seed)
-    peak = index.peak_accel.to_numpy()
+    peak = (index.rms_accel if policy == "stratified_rms" else index.peak_accel).to_numpy()
     memory: dict[str, list[int]] = {}
     selection = []
+    if policy == "global_random":
+        ids = np.concatenate([bags[r] for r in sorted(records)])
+        # Total capacity matches the realized size of the per-class buffers.
+        capacity = sum(min(per_class, sum(len(bags[r]) for r in records if label[r] == k))
+                       for k in {label[r] for r in records})
+        for ix in rng.choice(ids, capacity, replace=False):
+            record = index.record.iat[ix]
+            memory.setdefault(record, []).append(ix)
+            selection.append((CLASSES[label[record]], record, int(ix), float(peak[ix]), policy))
+        return ReplayMemory({r: np.asarray(v, dtype=np.int64) for r, v in memory.items()}, selection)
     for k in sorted({label[r] for r in records}):
         group = sorted(r for r in records if label[r] == k)
         ids = np.concatenate([bags[r] for r in group])
         n_keep = min(per_class, len(ids))
         if policy == "random":
             chosen = rng.choice(ids, n_keep, replace=False).tolist()
-        elif policy == "stratified":
+        elif policy == "reservoir":
+            chosen = reservoir(ids, n_keep, rng)
+        elif policy == "recording_balanced":
+            chosen = recording_balanced(group, bags, n_keep, rng)
+        elif policy == "impact_only":
+            chosen = impact_only(ids, peak, n_keep, rng)
+        elif policy in ("stratified", "stratified_rms"):
             chosen = impact_stratified(group, bags, peak, n_keep, rng)
         else:
             data = features[ids]

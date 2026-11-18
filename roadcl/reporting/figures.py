@@ -6,138 +6,99 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-ABLATION_KEYS = {
-    "memory_sweep": "memory_per_class",
-    "stratified_memory": "memory_per_class",
-    "representation": "representation",
-    "supervision": "objective",
-    "gate_ablation": "kd_lambda",
-    "stratified_gate_weight": "kd_lambda",
-    "model_capacity": "width",
-}
+NAMES = {"weight_align": "Weight Aligning", "er_ace": "ER-ACE", "herding": "Herding", "lwf": "LwF",
+         "joint": "Joint", "reservoir": "Balanced reservoir", "fine_tune": "Fine-tuning",
+         "random": "Class-quota random", "global_random": "Uniform random", "stratified": "Recording + impact",
+         "stratified_gated_kd": "Recording + impact + gated KD", "impact_only": "Impact only",
+         "recording_balanced": "Recording only", "diverse": "Diverse", "fixed_kd": "Diverse + fixed KD",
+         "gated_kd": "Diverse + gated KD", "stratified_fixed_kd": "Recording + impact + fixed KD"}
+CONDITIONS = ["original", "x90", "y90", "z90", "sensor_noise", "gyro_missing"]
+CONDITION_LABELS = ["Clean", "90° about x", "90° about y", "90° about z", "Sensor noise", "Gyroscope missing"]
+SWEEPS = [("memory_sweep", "memory_per_class"), ("stratified_memory", "memory_per_class"),
+          ("model_capacity", "width"), ("bag_size", "bag_size"), ("representation", "representation"),
+          ("gate_ablation", "kd_lambda"), ("stratified_gate_weight", "kd_lambda")]
 
 
-def _save(fig: plt.Figure, path: Path) -> None:
-    fig.tight_layout()
-    fig.savefig(path, dpi=170)
-    plt.close(fig)
+def method_bars(final: pd.DataFrame, out: Path) -> None:
+    """Clean-recording macro-F1 with session-bootstrap intervals for the main suite and the replay ablation."""
+    for suite, filename in (("main", "baseline"), ("component_ablation", "replay_ablation")):
+        sub = final[(final.suite == suite) & (final.rotation == "original")]
+        sub.to_csv(out / f"{filename}.csv", index=False)
+        for order, df in sub.groupby("first_anomaly"):
+            df = df.sort_values("estimate")
+            fig, ax = plt.subplots(figsize=(3.5, max(2, len(df) * 0.22)))
+            ax.barh(df.method.map(NAMES), df.estimate, color="#447799")
+            ax.hlines(df.method.map(NAMES), df.lower, df.upper, color="black", linewidth=1)
+            ax.set(xlim=(0, 1), xlabel="Recording-level macro-F1", title=f"{order} first")
+            fig.tight_layout()
+            fig.savefig(out / f"{filename}_{order}.svg", bbox_inches="tight")
+            plt.close(fig)
 
 
-def method_bars(summary: pd.DataFrame, out: Path) -> None:
-    main = summary[(summary.suite == "main") & (summary.rotation == "original")]
-    for order, group in main.groupby("first_anomaly"):
-        group = group.sort_values("macro_f1_s2_mean", ascending=False)
-        fig, ax = plt.subplots(figsize=(9, 4.5))
-        ax.bar(group.method, group.macro_f1_s2_mean, yerr=group.macro_f1_s2_sd, capsize=2)
-        ax.set_ylim(0, 1)
-        ax.set_ylabel("Recording-level stage-2 macro-F1")
+def optimization_curves(losses: pd.DataFrame, out: Path) -> None:
+    """Mean out-of-fold stage-2 supervised loss of the comparable main methods."""
+    methods = ["fine_tune", "random", "stratified", "stratified_gated_kd"]
+    subset = losses[(losses.suite == "main") & (losses.stage == 2) & losses.method.isin(methods)]
+    for order, g in subset.groupby("first_anomaly"):
+        fig, ax = plt.subplots(figsize=(3.5, 2.45))
+        for (name, series), style in zip(g.groupby("method"), ["-", "--", "-.", ":"]):
+            curve = series.groupby("step").task_loss.mean()
+            ax.plot(curve.index + 1, curve, style, label=name.replace("_", " "), lw=1.1)
+        ax.set(xlabel="Incremental optimizer step", ylabel="Mean supervised loss", title=f"{order} first")
+        ax.legend(fontsize=6)
+        fig.tight_layout()
+        fig.savefig(out / f"optimization_{order}.svg")
+        plt.close(fig)
+
+
+def robustness(final: pd.DataFrame, out: Path) -> None:
+    """Stress-test intervals for clean and augmented training of the gated-KD replay method."""
+    robust = final[(final.method == "stratified_gated_kd") & final.suite.isin(["main", "augmented"])]
+    robust.to_csv(out / "robustness.csv", index=False)
+    for order, frame in robust.groupby("first_anomaly"):
+        fig, ax = plt.subplots(figsize=(3.5, 2.65))
+        for suite, offset, color, marker in (("main", -0.12, "#245E91", "o"), ("augmented", 0.12, "#A54C22", "s")):
+            g = frame[frame.suite == suite].set_index("rotation").reindex(CONDITIONS)
+            y = np.arange(len(CONDITIONS)) + offset
+            ax.hlines(y, g.lower, g.upper, color=color, lw=1)
+            ax.scatter(g.estimate, y, s=13, color=color, marker=marker,
+                       label="Clean training" if suite == "main" else "Augmented training")
+        ax.set_yticks(range(len(CONDITIONS)), CONDITION_LABELS)
+        ax.invert_yaxis()
+        ax.set_xlim(0, 1)
+        ax.set_xlabel("Recording-level macro-F1")
         ax.set_title(f"{order} first")
-        ax.tick_params(axis="x", labelrotation=35)
-        _save(fig, out / f"methods_{order.lower()}_first.png")
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.27), ncol=2, fontsize=7)
+        fig.tight_layout()
+        fig.savefig(out / f"robustness_{order}.svg", bbox_inches="tight")
+        plt.close(fig)
 
 
-def ablation_lines(summary: pd.DataFrame, out: Path) -> None:
-    for suite, key in ABLATION_KEYS.items():
-        group = summary[(summary.suite == suite) & (summary.rotation == "original")]
-        if group.empty:
+def sweeps(final: pd.DataFrame, out: Path) -> None:
+    """One figure per one-dimensional sweep of the full profile."""
+    for suite, field in SWEEPS:
+        sub = final[(final.suite == suite) & (final.rotation == "original")]
+        if sub.empty:
             continue
-        fig, ax = plt.subplots(figsize=(7, 4))
-        for order, sub in group.groupby("first_anomaly"):
-            sub = sub.sort_values(key)
-            ax.plot(sub[key].astype(str), sub.macro_f1_s2_mean, marker="o", label=f"{order} first")
-        ax.set_xlabel(key)
-        ax.set_ylabel("Stage-2 macro-F1")
-        ax.set_ylim(0, 1)
+        fig, ax = plt.subplots(figsize=(3.5, 2.4))
+        for order, g in sub.groupby("first_anomaly"):
+            g = g.sort_values(field)
+            ax.plot(g[field].astype(str), g.estimate, marker="o", label=f"{order} first")
+        ax.set(xlabel=field.replace("_", " "), ylabel="Macro-F1", ylim=(0, 1))
         ax.legend()
-        _save(fig, out / f"ablation_{suite}.png")
+        fig.tight_layout()
+        fig.savefig(out / f"{suite}.svg")
+        plt.close(fig)
 
 
-def memory_performance(scores: pd.DataFrame, out: Path) -> None:
-    subset = scores[(scores.suite == "main") & (scores.rotation == "original")
-                    & scores.method.isin(["random", "stratified", "diverse", "gated_kd"])]
-    if subset.empty:
-        return
-    fig, ax = plt.subplots(figsize=(7, 4))
-    for method, g in subset.groupby("method"):
-        ax.scatter(g.buffer_feature_bytes, g.macro_f1_s2, label=method, alpha=0.6)
-    ax.set_xlabel("Replay feature bytes")
-    ax.set_ylabel("Stage-2 macro-F1")
-    ax.legend()
-    _save(fig, out / "memory_performance.png")
-
-
-def stability_plasticity(scores: pd.DataFrame, out: Path) -> None:
-    main = scores[(scores.suite == "main") & (scores.rotation == "original")]
-    for order, frame in main.groupby("first_anomaly"):
-        means = frame.groupby("method")[["old_forgetting_pp", "new_recall"]].mean()
-        fig, ax = plt.subplots(figsize=(8, 5))
-        for method, row in means.iterrows():
-            ax.scatter(row.old_forgetting_pp, 100 * row.new_recall)
-            ax.annotate(method, (row.old_forgetting_pp, 100 * row.new_recall), xytext=(4, 3),
-                        textcoords="offset points", fontsize=8)
-        ax.set_xlabel("Old-class forgetting (pp)")
-        ax.set_ylabel("New-class recall (%)")
-        ax.set_ylim(-3, 103)
-        _save(fig, out / f"stability_plasticity_{order.lower()}.png")
-
-        recall_cols = [c for c in frame.columns if c.endswith("_recall_s2")]
-        ax = frame.groupby("method")[recall_cols].mean().plot.bar(figsize=(10, 5), rot=35)
-        ax.set_ylim(0, 1)
-        ax.set_ylabel("Stage-2 recall")
-        ax.legend(loc="lower right", fontsize=8)
-        _save(ax.figure, out / f"per_class_recall_{order.lower()}.png")
-
-
-def robustness(summary: pd.DataFrame, out: Path) -> None:
-    group = summary[summary.suite.isin(["main", "representation"])]
-    if group.empty:
-        return
-    table = group.groupby(["method", "representation", "rotation"]).macro_f1_s2_mean.mean().unstack("rotation")
-    ax = table.plot.bar(figsize=(10, 4.5), rot=35)
-    ax.set_ylim(0, 1)
-    ax.set_ylabel("Stage-2 macro-F1 (mean of orders)")
-    ax.legend(fontsize=7, ncol=3)
-    _save(ax.figure, out / "robustness.png")
-
-
-def training_curves(losses: pd.DataFrame, out: Path) -> None:
-    if losses.empty:
-        return
-    base = losses[(losses.suite == "main") & (losses.seed_id == 0) & (losses.fold == 0) & (losses.split_repeat == 0)]
-    for order, frame in base.groupby("first_anomaly"):
-        fig, ax = plt.subplots(figsize=(8, 4))
-        for method, g in frame[frame.stage == 2].groupby("method"):
-            ax.plot(g.step, g.total_loss, label=method, alpha=0.8)
-        ax.legend(fontsize=7, ncol=2)
-        ax.set_xlabel("Optimizer step")
-        ax.set_ylabel("Stage-2 total loss")
-        _save(fig, out / f"training_convergence_{order.lower()}.png")
-
-
-def gate_distribution(gates: pd.DataFrame, out: Path) -> None:
-    gates = gates[gates.method.isin(["stratified_gated_kd", "stratified_fixed_kd", "gated_kd"])] if not gates.empty else gates
-    if gates.empty:
-        return
-    fig, ax = plt.subplots(figsize=(8, 4))
-    for method, g in gates.groupby("method"):
-        ax.hist(g.gate_weight, bins=30, alpha=0.5, label=method, density=True)
-    ax.set_xlabel("Distillation gate weight")
-    ax.set_ylabel("Density")
-    ax.legend()
-    _save(fig, out / "gate_weight_distribution.png")
-
-
-def make_figures(scores: pd.DataFrame, summary: pd.DataFrame, losses: pd.DataFrame,
-                 gates: pd.DataFrame, out: Path) -> None:
-    out.mkdir(parents=True, exist_ok=True)
-    if summary.empty:
-        return
-    method_bars(summary, out)
-    ablation_lines(summary, out)
-    memory_performance(scores, out)
-    stability_plasticity(scores, out)
-    robustness(summary, out)
-    training_curves(losses, out)
-    gate_distribution(gates, out)
+def make_figures(summary: pd.DataFrame, losses: pd.DataFrame, out: Path) -> None:
+    plt.rcParams.update({"font.family": "serif", "font.size": 8, "svg.fonttype": "none"})
+    final = summary[summary.metric == "macro_f1_s2"]
+    method_bars(final, out)
+    robustness(final, out)
+    sweeps(final, out)
+    if not losses.empty:
+        optimization_curves(losses, out)
