@@ -15,7 +15,7 @@ def read_optional(path: Path) -> pd.DataFrame:
 
 
 def report_run(run_dir: Path, cfg: Config, figures: bool = True) -> None:
-    """Score saved predictions and write every summary table, report and, optionally, figure of a run."""
+    """Score saved predictions and write the run's tables, figures and report."""
     predictions = pd.read_csv(run_dir / "predictions.csv")
     aggregate_scores(predictions).to_csv(run_dir / "scores_by_fold_seed.csv", index=False)
     summary = clustered_summary(predictions, run_dir, cfg.protocol.bootstrap_iterations, cfg.protocol.seed)

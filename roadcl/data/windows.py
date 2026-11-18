@@ -64,7 +64,6 @@ def make_windows(data: pd.DataFrame, metadata: pd.DataFrame, cfg: DataConfig, ou
     metadata = metadata.copy()
     metadata["usable"] = metadata.record.isin(index.record)
     metadata.to_csv(out_dir / "recording_audit.csv", index=False)
-    # One source id must stay in one fold even when it appears under several classes.
     metadata.groupby("source_group").agg(
         n_records=("record", "nunique"), classes=("label", lambda x: ",".join(sorted(x.unique())))
     ).reset_index().to_csv(out_dir / "source_provenance.csv", index=False)

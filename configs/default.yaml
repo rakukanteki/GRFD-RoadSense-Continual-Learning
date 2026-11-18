@@ -14,7 +14,7 @@ data:
   stride: 45
   noise_std: 0.10
   perturbation_seed: 1007
-  session_manifest: null   # CSV with record,session_id to replace the filename session proxy
+  session_manifest: null
 
 training:
   steps: 100

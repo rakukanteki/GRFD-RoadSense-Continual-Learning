@@ -161,7 +161,6 @@ def select_replay(records: list[str], bags: dict[str, np.ndarray], label: dict[s
     selection = []
     if policy == "global_random":
         ids = np.concatenate([bags[r] for r in sorted(records)])
-        # Total capacity matches the realized size of the per-class buffers.
         capacity = sum(min(per_class, sum(len(bags[r]) for r in records if label[r] == k))
                        for k in {label[r] for r in records})
         for ix in rng.choice(ids, capacity, replace=False):

@@ -63,7 +63,6 @@ def make_feature_views(raw: np.ndarray, representations: list[str], cfg: DataCon
         for rotation in ROTATIONS:
             if not np.allclose(reference, views["gravity_relative", rotation], rtol=1e-4, atol=1e-4):
                 raise AssertionError("gravity-relative features changed under a rigid rotation")
-    # Draw order (rotations, gyro dropout, noise) is fixed so the seeded views are reproducible.
     rng = np.random.default_rng(cfg.perturbation_seed)
     quat = rng.normal(size=(len(raw), 4))
     matrices = Rotation.from_quat(quat / np.linalg.norm(quat, axis=1, keepdims=True)).as_matrix().astype(np.float32)

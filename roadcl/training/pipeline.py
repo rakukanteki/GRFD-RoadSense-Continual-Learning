@@ -113,7 +113,6 @@ def run_benchmark(cfg: Config) -> Path:
         for first in (1, 2):
             cache = {}
             for exp in suite:
-                # Suites that differ only in name share one selected learning rate; augmentation does not.
                 key = replace(exp, suite="augmented" if exp.suite == "augmented" else "clean")
                 if key not in cache:
                     cache[key] = select_lr(exp, repeat, fold, first, development, inner, windows, views, cfg)

@@ -20,7 +20,7 @@ def _replace_section(path: Path, marker: str, body: str) -> None:
 
 
 def dataset_tables(out: Path, data_dir: Path) -> None:
-    """Acquisition sidecars and window support appended to the dataset audit."""
+    """Append acquisition dates and window counts to the dataset audit."""
     audit = out / "dataset_audit.md"
     sidecars = []
     for row in pd.read_csv(out / "recording_audit.csv").itertuples():
@@ -80,7 +80,7 @@ def write_diagnostics(out: Path) -> None:
 
 
 def research_report(out: Path, cfg: Config, summary: pd.DataFrame) -> None:
-    """Markdown results with measurement scope and interpretation limits."""
+    """Write results_report.md with the result table, paired effects, resources and limits."""
     pair = pd.read_csv(out / "paired_method_comparisons.csv")
     resources = pd.read_csv(out / "resource_metrics.csv")
     final = summary[(summary.metric == "macro_f1_s2") & (summary.rotation == "original")]

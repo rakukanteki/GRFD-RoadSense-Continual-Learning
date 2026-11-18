@@ -5,9 +5,9 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-import pandas as pd  # noqa: E402
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 NAMES = {"weight_align": "Weight Aligning", "er_ace": "ER-ACE", "herding": "Herding", "lwf": "LwF",
          "joint": "Joint", "reservoir": "Balanced reservoir", "fine_tune": "Fine-tuning",
@@ -23,7 +23,7 @@ SWEEPS = [("memory_sweep", "memory_per_class"), ("stratified_memory", "memory_pe
 
 
 def method_bars(final: pd.DataFrame, out: Path) -> None:
-    """Clean-recording macro-F1 with session-bootstrap intervals for the main suite and the replay ablation."""
+    """Bar charts of clean macro-F1 with bootstrap intervals for the main suite and the replay ablation."""
     for suite, filename in (("main", "baseline"), ("component_ablation", "replay_ablation")):
         sub = final[(final.suite == suite) & (final.rotation == "original")]
         sub.to_csv(out / f"{filename}.csv", index=False)
@@ -55,7 +55,7 @@ def optimization_curves(losses: pd.DataFrame, out: Path) -> None:
 
 
 def robustness(final: pd.DataFrame, out: Path) -> None:
-    """Stress-test intervals for clean and augmented training of the gated-KD replay method."""
+    """Stress-test macro-F1 of stratified gated-KD replay with clean and augmented training."""
     robust = final[(final.method == "stratified_gated_kd") & final.suite.isin(["main", "augmented"])]
     robust.to_csv(out / "robustness.csv", index=False)
     for order, frame in robust.groupby("first_anomaly"):

@@ -100,7 +100,6 @@ def fit_model(net: nn.Module, features: torch.Tensor, bags: dict[str, np.ndarray
         logits = net(x)[:, :, active]
         y = torch.as_tensor([active.index(int(k)) for k in targets], dtype=torch.long)
         if ace_new is not None:
-            # ACE masks old classes on incoming bags only; with one arriving class this term is zero.
             keep = y != active.index(ace_new)
             pooled = bag_pool(logits)
             base = (F.cross_entropy(pooled[keep], y[keep], reduction="sum") / len(y)) if keep.any() else pooled.sum() * 0
@@ -127,7 +126,6 @@ def fit_model(net: nn.Module, features: torch.Tensor, bags: dict[str, np.ndarray
                 for c, g, b in zip(confidence.numpy(), gate.numpy(), per_bag.detach().numpy())
             )
         if lwf is not None:
-            # Distillation on incoming inputs only; no old examples are stored.
             student = bag_pool(net(x)[:, :, lwf.classes])
             with torch.no_grad():
                 soft = F.softmax(bag_pool(lwf.teacher(x)[:, :, lwf.classes]) / cfg.temperature, dim=-1)

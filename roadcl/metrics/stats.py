@@ -13,7 +13,7 @@ PAIRED_SUITES = ("main", "component_ablation", "augmented", "descriptor")
 
 
 def session_weights(pred: pd.DataFrame, iterations: int, seed: int) -> tuple[np.ndarray, dict]:
-    """Multinomial resampling weights of source groups within observed class-composition strata; row 0 is the sample."""
+    """Bootstrap weights over source groups, resampled within each class-composition stratum; row 0 is the observed sample."""
     groups = sorted(pred.source_group.unique())
     index = {g: i for i, g in enumerate(groups)}
     weights = np.zeros((iterations + 1, len(groups)), dtype=int)
@@ -77,7 +77,7 @@ def clustered_summary(pred: pd.DataFrame, out: Path, iterations: int, seed: int)
 
 
 def paired_differences(draws: dict) -> pd.DataFrame:
-    """Macro-F1 differences on the same bootstrap draws against each suite's reference and lower-named peers."""
+    """Macro-F1 differences on shared bootstrap draws against the suite reference and every method sorting before it."""
     rows = []
     for (order, view, suite, method), draw in draws.items():
         ref = ("main", "stratified_gated_kd") if suite == "augmented" else \

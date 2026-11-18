@@ -1,4 +1,3 @@
-# The reviewer run in TVT_Continual_Learning_Reviewer_Experiments.ipynb.
 experiment:
   name: tvt_grouped_evaluation
 

@@ -12,7 +12,7 @@ class Experiment:
     memory_per_class: int = 24
     kd_lambda: float = 1.0
     width: int = 32
-    bag_size: int = 0  # 0 means training.windows_per_bag
+    bag_size: int = 0
 
 
 @dataclass(frozen=True)

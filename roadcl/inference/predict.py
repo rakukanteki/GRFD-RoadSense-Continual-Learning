@@ -24,7 +24,7 @@ def load_checkpoint(path: str | Path) -> tuple[FeatureMLP, dict]:
 
 
 def predict_frame(frame: pd.DataFrame, checkpoint: str | Path, group_col: str = "source_file") -> pd.DataFrame:
-    """One prediction per recording: windows are featurized, scaled with the training statistics and pooled."""
+    """Predict each recording by featurizing its windows, scaling them with the training statistics and pooling."""
     net, ckpt = load_checkpoint(checkpoint)
     missing = [c for c in ckpt["axes"] if c not in frame.columns]
     if missing:

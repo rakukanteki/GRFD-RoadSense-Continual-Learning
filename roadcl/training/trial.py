@@ -105,12 +105,10 @@ class Trial:
         dim = raw.shape[1]
         augmented = exp.suite == "augmented"
 
-        # Stage-1 scaler: no stage-2 or held-out window can affect it.
         mu, sd = _fit_scaler(raw, ws.bags, old)
         old_ids = np.concatenate(list(old_bags.values()))
 
         def old_view(name: str) -> torch.Tensor:
-            # Only old training rows are materialized; NaNs make any other access visible.
             values = self.views[exp.representation, name]
             z = np.full_like(values, np.nan)
             z[old_ids] = (values[old_ids] - mu) / sd
@@ -139,7 +137,6 @@ class Trial:
         joint = exp.method == "joint"
         available = {**(old_bags if joint else memory.bags), **new_bags}
         mean, std = _fit_scaler(raw, ws.bags, self.spec.train) if joint else (mu, sd)
-        # Stage 2 sees only incoming windows and the retained replay vectors, remapped to a compact array.
         update_ids = np.concatenate(list(available.values()))
         update_z = torch.from_numpy((raw[update_ids] - mean) / std)
         current, offset = {}, 0
@@ -219,7 +216,7 @@ class Trial:
         return out
 
     def _latency(self, net, mean, std) -> dict:
-        """Features, scaling, MLP, recording pooling and decision for one complete held-out recording."""
+        """Time features, scaling, MLP and pooling for the first held-out recording."""
         record = self.spec.test[0]
         sample = self.raw_windows[self.ws.bags[record]]
 

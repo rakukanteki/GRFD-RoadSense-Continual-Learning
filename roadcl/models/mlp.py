@@ -22,7 +22,7 @@ class FeatureMLP(nn.Module):
 
 
 def bag_pool(logits: torch.Tensor, dim: int = 1) -> torch.Tensor:
-    """Log-mean-exp over the windows of a bag: a smooth maximum between mean and max pooling."""
+    """Log-mean-exp over the windows of a bag, between mean and max pooling."""
     return torch.logsumexp(logits, dim=dim) - math.log(logits.shape[dim])
 
 
